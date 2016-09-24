@@ -45,7 +45,7 @@ namespace HolyNoodle.KnowledgeBase
                     {
                         if (relation.Value is KnowledgeEntity)
                         {
-                            queryBuilder.Append(" MATCH (entity)-[rel" + whereCount + ":" + CypherFormat(property.Key)  + "]->(target" + whereCount + ":" + ENTITY_NAME + " {id:{pvalue" + whereCount + "}})");
+                            queryBuilder.Append(" MATCH (entity)-[rel" + whereCount + ":" + CypherFormat(property.Key) + "]->(target" + whereCount + ":" + ENTITY_NAME + " {id:{pvalue" + whereCount + "}})");
                             parameters.Add("pvalue" + whereCount, ((KnowledgeEntity)relation.Value).Id);
                         }
                         else
@@ -139,15 +139,25 @@ namespace HolyNoodle.KnowledgeBase
             }
             return true;
         }
-        public async Task<bool> ResetDatabase()
+        public async Task<bool> InitDatabase()
         {
             using (var session = _db.Session())
             {
-                session.Run(new Statement("MATCH (n) OPTIONAL MATCH (n)-[r]-() DELETE r,n"));
-                session.Run(new Statement("CREATE INDEX ON: Entity(id)"));
-                session.Run(new Statement("CREATE INDEX ON: Value(value)"));
+                var result = session.Run(new Statement("MATCH (n:World) return n"));
+                if (result.Any()) return true;
+                try
+                {
+                    session.Run(new Statement("CREATE INDEX ON: Entity(id)"));
+                    session.Run(new Statement("CREATE INDEX ON: Value(value)"));
+                    session.Run(new Statement("CREATE (n:World) return n"));
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
             }
-            return true;
+
         }
         #endregion
 
