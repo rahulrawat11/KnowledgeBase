@@ -43,7 +43,7 @@ namespace HolyNoodle.KnowledgeBase
 
         public object GetRelationship(string key)
         {
-            key = key.Replace(" ", "_");
+            key = KnowledgeBase.CypherFormat(key);
             if (!Properties.ContainsKey(key))
             {
                 return null;
