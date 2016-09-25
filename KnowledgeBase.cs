@@ -81,30 +81,37 @@ namespace HolyNoodle.KnowledgeBase
                 var results = session.Run(queryBuilder.ToString(), parameters);
 
                 var finalList = new Dictionary<string, KnowledgeEntity>();
-                foreach (var result in results)
+                try
                 {
-                    var id = (result.Values["entity"] as INode).Properties["id"] as string;
-                    var relationInfo = result.Values["relInfo"] as IRelationship;
-                    if (!finalList.ContainsKey(id))
-                    {
-                        finalList.Add(id, new KnowledgeEntity { Id = id });
-                    }
-                    var resultEntity = finalList[id];
 
-                    var key = result.Values["key"] as string;
-                    if (!resultEntity.Properties.ContainsKey(key))
+                    foreach (var result in results)
                     {
-                        resultEntity.Properties.Add(key, new List<KnowledgeEntityRelationship>());
-                    }
+                        var id = (result.Values["entity"] as INode).Properties["id"] as string;
+                        var relationInfo = result.Values["relInfo"] as IRelationship;
+                        if (!finalList.ContainsKey(id))
+                        {
+                            finalList.Add(id, new KnowledgeEntity { Id = id });
+                        }
+                        var resultEntity = finalList[id];
 
-                    resultEntity.Properties[key].Add(new KnowledgeEntityRelationship
-                    {
-                        IsFromDatabase = true,
-                        Start = relationInfo.Properties.ContainsKey("start") ? (long)relationInfo.Properties["start"] : 0,
-                        End = relationInfo.Properties.ContainsKey("end") ? (long)relationInfo.Properties["end"] : 0,
-                        Weight = relationInfo.Properties.ContainsKey("weight") ? (long)relationInfo.Properties["weight"] : 0,
-                        Value = result.Values["value"]
-                    });
+                        var key = result.Values["key"] as string;
+                        if (!resultEntity.Properties.ContainsKey(key))
+                        {
+                            resultEntity.Properties.Add(key, new List<KnowledgeEntityRelationship>());
+                        }
+
+                        resultEntity.Properties[key].Add(new KnowledgeEntityRelationship
+                        {
+                            IsFromDatabase = true,
+                            Start = relationInfo.Properties.ContainsKey("start") ? (long)relationInfo.Properties["start"] : 0,
+                            End = relationInfo.Properties.ContainsKey("end") ? (long)relationInfo.Properties["end"] : 0,
+                            Weight = relationInfo.Properties.ContainsKey("weight") ? (long)relationInfo.Properties["weight"] : 0,
+                            Value = result.Values["value"]
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
                 }
                 return finalList.Values.ToList();
             }
@@ -139,7 +146,7 @@ namespace HolyNoodle.KnowledgeBase
             }
             return true;
         }
-        public async Task<bool> InitDatabase()
+        public async Task<bool> InitDatabase(bool perfTest = false)
         {
             using (var session = _db.Session())
             {
@@ -150,6 +157,25 @@ namespace HolyNoodle.KnowledgeBase
                     session.Run(new Statement("CREATE INDEX ON: Entity(id)"));
                     session.Run(new Statement("CREATE INDEX ON: Value(value)"));
                     session.Run(new Statement("CREATE (n:World) return n"));
+                    if (perfTest)
+                    {
+                        Task.Factory.StartNew(async () =>
+                        {
+                            var _db = new KnowledgeBase("bolt://localhost:7687/", "neo4j", "nightwish");
+                            var rand = new Random();
+                            for (var i = 0; i < 100000; ++i)
+                            {
+                                var entity = await _db.CreateEntity();
+                                entity.AddRelationship("N° Sinistre", rand.Next(1000000, 9999999).ToString());
+                                entity.AddRelationship("Application", "Calculette");
+                                entity.AddRelationship("SimulationPath", "");
+                                entity.AddRelationship("CreatedDateTicks", DateTime.Now.Ticks);
+                                await _db.UpdateEntity(entity);
+                            };
+                        });
+                        
+                    }
+
                     return true;
                 }
                 catch
