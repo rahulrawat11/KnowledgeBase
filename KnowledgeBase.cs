@@ -146,7 +146,26 @@ namespace HolyNoodle.KnowledgeBase
             }
             return true;
         }
-        public async Task<bool> InitDatabase(bool perfTest = false)
+        public async Task<bool> SetTests(int numberOfNodes, List<string> properties, List<object> values)
+        {
+            var _db = new KnowledgeBase("bolt://localhost:7687/", "neo4j", "nightwish");
+            var rand = new Random();
+            for(var i = 0; i < numberOfNodes; ++i)
+            {
+                var entity = await _db.CreateEntity();
+                for (var j = 0; j < properties.Count(); ++j)
+                {
+                    object value = null;
+                    if (values[j].ToString() == "StringRandom")
+                        value = rand.Next(0, 9999999).ToString();
+                    else value = values[j];
+                    entity.AddRelationship(properties[j], value);
+                }
+                await _db.UpdateEntity(entity);
+            }
+            return true;
+        }
+        public async Task<bool> InitDatabase()
         {
             using (var session = _db.Session())
             {
@@ -154,28 +173,12 @@ namespace HolyNoodle.KnowledgeBase
                 if (result.Any()) return true;
                 try
                 {
-                    session.Run(new Statement("CREATE INDEX ON: Entity(id)"));
-                    session.Run(new Statement("CREATE INDEX ON: Value(value)"));
-                    session.Run(new Statement("CREATE (n:World) return n"));
-                    if (perfTest)
-                    {
-                        Task.Factory.StartNew(async () =>
-                        {
-                            var _db = new KnowledgeBase("bolt://localhost:7687/", "neo4j", "nightwish");
-                            var rand = new Random();
-                            for (var i = 0; i < 100000; ++i)
-                            {
-                                var entity = await _db.CreateEntity();
-                                entity.AddRelationship("N° Sinistre", rand.Next(1000000, 9999999).ToString());
-                                entity.AddRelationship("Application", "Calculette");
-                                entity.AddRelationship("SimulationPath", "");
-                                entity.AddRelationship("CreatedDateTicks", DateTime.Now.Ticks);
-                                await _db.UpdateEntity(entity);
-                            };
-                        });
-                        
-                    }
+                    session.Run(new Statement("CREATE INDEX ON: " + ENTITY_NAME + "(id)"));
+                    session.Run(new Statement("CREATE INDEX ON: " + VALUE_NAME + "(value)"));
+                    session.Run(new Statement("CREATE CONSTRAINT ON (entity:" + ENTITY_NAME + ") ASSERT entity.id IS UNIQUE"));
+                    session.Run(new Statement("CREATE CONSTRAINT ON (value:" + VALUE_NAME + ") ASSERT value.value IS UNIQUE"));
 
+                    session.Run(new Statement("CREATE (n:World) return n"));
                     return true;
                 }
                 catch
