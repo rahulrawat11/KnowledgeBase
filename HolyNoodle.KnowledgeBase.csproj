@@ -57,7 +57,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CreateOrUpdateEntity.cs" />
+    <Compile Include="DeleteEntity.cs" />
     <Compile Include="KnowledgeBase.cs" />
     <Compile Include="KnowledgeEntity.cs" />
     <Compile Include="KnowledgeDb.cs" />

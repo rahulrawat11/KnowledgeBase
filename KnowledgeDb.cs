@@ -75,6 +75,7 @@ namespace HolyNoodle.KnowledgeBase
         private KnowledgeBase Connect(int deph = 0)
         {
             _db = new KnowledgeBase(_connectionString, _connectionLogin, _connectionPassword);
+            _db.InitDatabase().Wait();
             return _db;
         }
         private KnowledgeEntity CreateEntity(IDbProcedure procedure)
