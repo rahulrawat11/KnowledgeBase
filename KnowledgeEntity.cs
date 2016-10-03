@@ -46,7 +46,7 @@ namespace HolyNoodle.KnowledgeBase
             key = KnowledgeBase.CypherFormat(key);
             if (!Properties.ContainsKey(key))
             {
-                return null;
+                return string.Empty;
             }
             return Properties[key][0].Value;
         }

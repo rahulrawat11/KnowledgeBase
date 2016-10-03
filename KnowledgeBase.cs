@@ -188,6 +188,19 @@ namespace HolyNoodle.KnowledgeBase
             }
 
         }
+        public async Task<bool> DeleteEntity(KnowledgeEntity entity)
+        {
+            if (string.IsNullOrEmpty(entity.Id)) return false;
+
+            using (var session = _db.Session())
+            {
+                session.Run("MATCH (entity:" + ENTITY_NAME + " {id: {pId})-[r]->() DELETE r, entity", new  new Dictionary<string, object>
+                {
+                    { "pId", entity.Id }
+                });
+            }
+            return true;
+        }
         #endregion
 
         #region Private Methods
