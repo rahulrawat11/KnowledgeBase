@@ -11,7 +11,7 @@
     <iconUrl>http://ICON_URL_HERE_OR_DELETE_THIS_LINE</iconUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>$description$</description>
-    <releaseNotes>Creation of package</releaseNotes>
+    <releaseNotes>Add filter to look for result. Working with optional match for this. Add KnowledgeDb to work as HolyNoodle.Utility IDb (not finished)</releaseNotes>
     <copyright>Copyright 2016</copyright>
     <tags>Knowledge Base Database Graph Neo4j</tags>
   </metadata>
