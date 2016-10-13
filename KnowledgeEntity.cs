@@ -31,14 +31,25 @@ namespace HolyNoodle.KnowledgeBase
 
         }
 
-        public void AddRelationship(string key, object value)
+        public void AddRelationship(string key, object value = null)
         {
+            if (string.IsNullOrEmpty(key) || value == null) return;
+
             key = KnowledgeBase.CypherFormat(key);
             if (!Properties.ContainsKey(key))
             {
                 Properties.Add(key, new List<KnowledgeEntityRelationship>());
             }
-            Properties[key].Add(new KnowledgeEntityRelationship { Value = value });
+            var first = Properties[key].FirstOrDefault(r => r.Value.Equals(value) );
+            if (first != null)
+            {
+                first.Weight++;
+                first.WeightChanged = true;
+            }
+            else
+            {
+                Properties[key].Add(new KnowledgeEntityRelationship { Value = value });
+            }
         }
 
         public object GetRelationship(string key)
@@ -50,13 +61,24 @@ namespace HolyNoodle.KnowledgeBase
             }
             return Properties[key][0].Value;
         }
+
+        public List<KnowledgeEntityRelationship> GetRelationships(string key)
+        {
+            key = KnowledgeBase.CypherFormat(key);
+            if (!Properties.ContainsKey(key))
+            {
+                return new List<KnowledgeEntityRelationship>();
+            }
+            return Properties[key];
+        }
     }
 
     public class KnowledgeEntityRelationship
     {
         public bool IsFromDatabase { get; internal set; }
-        public long Start { get; set; }
-        public long End { get; set; }
+        public bool WeightChanged { get; internal set; }
+        //public long Start { get; set; }
+        //public long End { get; set; }
         public long Weight { get; set; }
         public object Value { get; set; }
     }

@@ -47,6 +47,10 @@ namespace HolyNoodle.KnowledgeBase
                         parameters.Add("pvalue" + whereCount, relation.Value);
                         ++whereCount;
                     }
+                    else
+                    {
+                        queryBuilder.Append(" MATCH (entity)-[:" + CypherFormat(property.Key) + "]->()");
+                    }
                 }
             }
 
@@ -84,8 +88,8 @@ namespace HolyNoodle.KnowledgeBase
                         resultEntity.Properties[key].Add(new KnowledgeEntityRelationship
                         {
                             IsFromDatabase = true,
-                            Start = relationInfo.Properties.ContainsKey("start") ? (long)relationInfo.Properties["start"] : 0,
-                            End = relationInfo.Properties.ContainsKey("end") ? (long)relationInfo.Properties["end"] : 0,
+                            //Start = relationInfo.Properties.ContainsKey("start") ? (long)relationInfo.Properties["start"] : 0,
+                            //End = relationInfo.Properties.ContainsKey("end") ? (long)relationInfo.Properties["end"] : 0,
                             Weight = relationInfo.Properties.ContainsKey("weight") ? (long)relationInfo.Properties["weight"] : 0,
                             Value = result.Values["value"]
                         });
@@ -124,28 +128,35 @@ namespace HolyNoodle.KnowledgeBase
                     else
                     {
                         queryBuilder.Append(" MATCH (entity)-[rel" + whereCount + ":" + CypherFormat(property.Key) + "]->(target" + whereCount + ":" + VALUE_NAME + ")");
-                        if (relation.Value is string && ((string)relation.Value).IndexOf("*") > -1)
+                        if (relation.Value == null)
                         {
-                            queryBuilder.Append(" WHERE target" + whereCount + ".value =~ {pvalue" + whereCount + "}");
-                            parameters.Add("pvalue" + whereCount, ((string)relation.Value).Replace("*", ".*"));
+                            queryBuilder.Append(" MATCH (entity)-[:" + CypherFormat(property.Key) + "]->()");
                         }
                         else
                         {
-                            queryBuilder.Append(" WHERE target" + whereCount + ".value = {pvalue" + whereCount + "}");
-                            parameters.Add("pvalue" + whereCount, relation.Value);
+                            if (relation.Value is string && ((string)relation.Value).IndexOf("*") > -1)
+                            {
+                                queryBuilder.Append(" WHERE target" + whereCount + ".value =~ {pvalue" + whereCount + "}");
+                                parameters.Add("pvalue" + whereCount, ((string)relation.Value).Replace("*", ".*"));
+                            }
+                            else
+                            {
+                                queryBuilder.Append(" WHERE target" + whereCount + ".value = {pvalue" + whereCount + "}");
+                                parameters.Add("pvalue" + whereCount, relation.Value);
+                            }
                         }
 
                     }
                     queryBuilder.Append(" AND (rel" + whereCount + ".weight >= " + relation.Weight + " OR rel" + whereCount + ".weight is null)");
 
-                    if (relation.Start > 0)
-                    {
-                        queryBuilder.Append(" AND rel" + whereCount + ".start >= " + relation.Start);
-                    }
-                    if (relation.End > 0)
-                    {
-                        queryBuilder.Append(" AND rel" + whereCount + ".end <= " + relation.End);
-                    }
+                    //if (relation.Start > 0)
+                    //{
+                    //    queryBuilder.Append(" AND rel" + whereCount + ".start >= " + relation.Start);
+                    //}
+                    //if (relation.End > 0)
+                    //{
+                    //    queryBuilder.Append(" AND rel" + whereCount + ".end <= " + relation.End);
+                    //}
                 }
                 ++whereCount;
             }
@@ -176,8 +187,8 @@ namespace HolyNoodle.KnowledgeBase
                         resultEntity.Properties[key].Add(new KnowledgeEntityRelationship
                         {
                             IsFromDatabase = true,
-                            Start = relationInfo.Properties.ContainsKey("start") ? (long)relationInfo.Properties["start"] : 0,
-                            End = relationInfo.Properties.ContainsKey("end") ? (long)relationInfo.Properties["end"] : 0,
+                            //Start = relationInfo.Properties.ContainsKey("start") ? (long)relationInfo.Properties["start"] : 0,
+                            //End = relationInfo.Properties.ContainsKey("end") ? (long)relationInfo.Properties["end"] : 0,
                             Weight = relationInfo.Properties.ContainsKey("weight") ? (long)relationInfo.Properties["weight"] : 0,
                             Value = result.Values["value"]
                         });
@@ -279,34 +290,45 @@ namespace HolyNoodle.KnowledgeBase
         #region Private Methods
         private async Task<bool> SetProperties(KnowledgeEntity entity, ISession session)
         {
-            foreach (var property in entity.Properties.Where(p => p.Value.Any(r => !r.IsFromDatabase && r.Value != null)))
+            foreach (var property in entity.Properties.Where(p => p.Value.Any(r => (!r.IsFromDatabase || r.WeightChanged))))
             {
-                foreach (var relationship in property.Value)
+                foreach (var relationship in property.Value.Where(r => (!r.IsFromDatabase || r.WeightChanged)))
                 {
                     var parameters = new Dictionary<string, object>();
                     var queryBuilder = new StringBuilder("MATCH (entity:" + ENTITY_NAME + " { id:{pid}}) ");
                     if (relationship.Value is KnowledgeEntity)
                     {
-                        queryBuilder.Append("MATCH (target:" + ENTITY_NAME + " { id:{ptargetId}}) ");
+                        queryBuilder.Append(" MATCH (target:" + ENTITY_NAME + " { id:{ptargetId}}) ");
                         parameters.Add("ptargetId", ((KnowledgeEntity)relationship.Value).Id);
                     }
                     else
                     {
                         await GetValueNode(relationship.Value, session);
-                        queryBuilder.Append("MATCH (target:" + VALUE_NAME + " {value:{pvalue}})");
+                        queryBuilder.Append(" MATCH (target:" + VALUE_NAME + " {value:{pvalue}})");
                         parameters.Add("pvalue", relationship.Value);
                     }
 
-                    queryBuilder.Append("CREATE (entity)-[:" + CypherFormat(property.Key) + " {");
-                    queryBuilder.Append("start:{pstart},");
-                    queryBuilder.Append("end: {pend},");
-                    queryBuilder.Append("weight:{pweight}}]->(target)");
+                    if (!relationship.IsFromDatabase)
+                    {
+                        queryBuilder.Append(" CREATE (entity)-[:" + CypherFormat(property.Key) + " {");
+                        queryBuilder.Append("weight:{pweight}}]->(target)");
+                    }
+                    else
+                    {
+                        if (relationship.WeightChanged)
+                        {
+                            queryBuilder.Append(" MATCH (entity)-[r:" + CypherFormat(property.Key) + "]->(target)");
+                            queryBuilder.Append(" SET r.weight = {pweight}");
+                        }
+                    }
 
                     parameters.Add("pid", entity.Id);
-                    parameters.Add("pstart", DateTime.Now.Ticks);
-                    parameters.Add("pend", 0);
+                    //parameters.Add("pstart", DateTime.Now.Ticks);
+                    //parameters.Add("pend", 0);
                     parameters.Add("pweight", relationship.Weight);
                     session.Run(new Statement(queryBuilder.ToString(), parameters));
+                    relationship.IsFromDatabase = true;
+                    relationship.WeightChanged = false;
                 }
             }
             return true;
