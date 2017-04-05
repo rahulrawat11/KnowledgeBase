@@ -1,8 +1,8 @@
-﻿using System;
+﻿using HolyNoodle.Utility.DAL;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Reflection;
 
 namespace HolyNoodle.KnowledgeBase
 {
@@ -16,19 +16,36 @@ namespace HolyNoodle.KnowledgeBase
         public string Id { get; internal set; }
         public IDictionary<string, List<KnowledgeEntityRelationship>> Properties { get; set; }
 
-        public T MapToObject<T>(KnowledgeEntity entity, T obj)
+        public T MapToObject<T>() where T : IDalObject
         {
             var type = typeof(T);
-            foreach(var property in entity.Properties)
+            var result = Activator.CreateInstance(type) as T;
+
+            if (result == null) throw new Exception("Type " + type.FullName + " could not be instanciate");
+
+            foreach (var property in Properties)
             {
-                
+                var propertyInfo = type.GetProperty(property.Key);
+                if (propertyInfo != null)
+                {
+                    propertyInfo.SetValue(result, GetRelationship(property.Key));
+                }
             }
-            return obj;
+            return result;
         }
 
-        public void MapFromObject<T>(T obj)
+        public void MapFromObject<T>(T obj) where T : IDalObject
         {
-
+            var type = typeof(T);
+            foreach (var propertyInfo in type.GetProperties())
+            {
+                var attribute = propertyInfo.GetCustomAttributes<DalAttribute>().FirstOrDefault();
+                if (attribute != null)
+                {
+                    var values = new List<KnowledgeEntityRelationship>();
+                    AddRelationship(attribute.DBName != null ? attribute.DBName : propertyInfo.Name, propertyInfo.GetValue(obj));
+                }
+            }
         }
 
         public void AddRelationship(string key, object value = null)
@@ -40,7 +57,7 @@ namespace HolyNoodle.KnowledgeBase
             {
                 Properties.Add(key, new List<KnowledgeEntityRelationship>());
             }
-            var first = Properties[key].FirstOrDefault(r => r.Value.Equals(value) );
+            var first = Properties[key].FirstOrDefault(r => r.Value.Equals(value));
             if (first != null)
             {
                 first.Weight++;
@@ -71,14 +88,33 @@ namespace HolyNoodle.KnowledgeBase
             }
             return Properties[key];
         }
+
+        private bool IsGenericList(Type type)
+        {
+            if (type == null)
+            {
+                throw new ArgumentNullException("type");
+            }
+            foreach (Type @interface in type.GetInterfaces())
+            {
+                if (@interface.IsGenericType)
+                {
+                    if (@interface.GetGenericTypeDefinition() == typeof(ICollection<>))
+                    {
+                        // if needed, you can also return the type used as generic argument
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
     }
 
     public class KnowledgeEntityRelationship
     {
         public bool IsFromDatabase { get; internal set; }
         public bool WeightChanged { get; internal set; }
-        //public long Start { get; set; }
-        //public long End { get; set; }
+        public long Happened { get; set; }
         public long Weight { get; set; }
         public object Value { get; set; }
     }

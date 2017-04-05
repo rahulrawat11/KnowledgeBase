@@ -189,5 +189,30 @@ namespace HolyNoodle.KnowledgeBase
                 CacheProvider.Cache(procedure, null);
             }
         }
+
+        public Task ExecuteNonQueryAsync(IDbProcedure procedure)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<object> ExecuteScalarAsync(IDbProcedure procedure)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<List<T>> ExecuteAsync<T>(IDbProcedure procedure) where T : IDalObject
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<bool> RefreshAllBindings(IList<IDalObject> objects)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<bool> RefreshBindings(IList<IDalObject> objects, string name)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
