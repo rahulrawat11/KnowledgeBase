@@ -60,8 +60,8 @@ namespace HolyNoodle.KnowledgeBase
             var first = Properties[key].FirstOrDefault(r => r.Value.Equals(value));
             if (first != null)
             {
-                first.Weight++;
-                first.WeightChanged = true;
+                //    first.Weight++;
+                //    first.WeightChanged = true;
             }
             else
             {
@@ -113,9 +113,7 @@ namespace HolyNoodle.KnowledgeBase
     public class KnowledgeEntityRelationship
     {
         public bool IsFromDatabase { get; internal set; }
-        public bool WeightChanged { get; internal set; }
-        public long Happened { get; set; }
-        public long Weight { get; set; }
+       
         public object Value { get; set; }
     }
 }

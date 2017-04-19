@@ -61,6 +61,7 @@ namespace HolyNoodle.KnowledgeBase
                 queryBuilder.Append(" WITH entity, key, property, target" + filterCount + " WHERE not target" + filterCount + " is null");
                 ++filterCount;
             }
+            
 
             queryBuilder.Append(" RETURN entity, type(key) as key, property.value as value, key as relInfo ORDER BY key.weight DESC");
             using (var session = _db.Session())
@@ -90,7 +91,7 @@ namespace HolyNoodle.KnowledgeBase
                             IsFromDatabase = true,
                             //Start = relationInfo.Properties.ContainsKey("start") ? (long)relationInfo.Properties["start"] : 0,
                             //End = relationInfo.Properties.ContainsKey("end") ? (long)relationInfo.Properties["end"] : 0,
-                            Weight = relationInfo.Properties.ContainsKey("weight") ? (long)relationInfo.Properties["weight"] : 0,
+                            //Weight = relationInfo.Properties.ContainsKey("weight") ? (long)relationInfo.Properties["weight"] : 0,
                             Value = result.Values["value"]
                         });
                     }
@@ -107,7 +108,7 @@ namespace HolyNoodle.KnowledgeBase
             var queryBuilder = new StringBuilder("MATCH (entity:" + ENTITY_NAME);
             var parameters = new Dictionary<string, object>();
 
-            if (entity.Id != null)
+            if (entity.Id != null)  
             {
                 queryBuilder.Append(" {id:{pid}}");
                 parameters.Add("pid", entity.Id);
@@ -147,7 +148,7 @@ namespace HolyNoodle.KnowledgeBase
                         }
 
                     }
-                    queryBuilder.Append(" AND (rel" + whereCount + ".weight >= " + relation.Weight + " OR rel" + whereCount + ".weight is null)");
+                    //queryBuilder.Append(" AND (rel" + whereCount + ".weight >= " + relation.Weight + " OR rel" + whereCount + ".weight is null)");
 
                     //if (relation.Start > 0)
                     //{
@@ -189,7 +190,7 @@ namespace HolyNoodle.KnowledgeBase
                             IsFromDatabase = true,
                             //Start = relationInfo.Properties.ContainsKey("start") ? (long)relationInfo.Properties["start"] : 0,
                             //End = relationInfo.Properties.ContainsKey("end") ? (long)relationInfo.Properties["end"] : 0,
-                            Weight = relationInfo.Properties.ContainsKey("weight") ? (long)relationInfo.Properties["weight"] : 0,
+                            //Weight = relationInfo.Properties.ContainsKey("weight") ? (long)relationInfo.Properties["weight"] : 0,
                             Value = result.Values["value"]
                         });
                     }
@@ -257,7 +258,7 @@ namespace HolyNoodle.KnowledgeBase
                 if (result.Any()) return true;
                 try
                 {
-                    session.Run(new Statement("CREATE INDEX ON: " + ENTITY_NAME + "(id)"));
+                    session.Run(new Statement("CREATE INDEX ON: " + ENTITY_NAME + "(id)")); // retirer
                     session.Run(new Statement("CREATE INDEX ON: " + VALUE_NAME + "(value)"));
                     session.Run(new Statement("CREATE CONSTRAINT ON (entity:" + ENTITY_NAME + ") ASSERT entity.id IS UNIQUE"));
                     session.Run(new Statement("CREATE CONSTRAINT ON (value:" + VALUE_NAME + ") ASSERT value.value IS UNIQUE"));
@@ -283,54 +284,54 @@ namespace HolyNoodle.KnowledgeBase
                     { "pId", entity.Id }
                 });
             }
-            return true;
+            return true; 
         }
         #endregion
 
         #region Private Methods
         private async Task<bool> SetProperties(KnowledgeEntity entity, ISession session)
         {
-            foreach (var property in entity.Properties.Where(p => p.Value.Any(r => (!r.IsFromDatabase || r.WeightChanged))))
-            {
-                foreach (var relationship in property.Value.Where(r => (!r.IsFromDatabase || r.WeightChanged)))
-                {
-                    var parameters = new Dictionary<string, object>();
-                    var queryBuilder = new StringBuilder("MATCH (entity:" + ENTITY_NAME + " { id:{pid}}) ");
-                    if (relationship.Value is KnowledgeEntity)
-                    {
-                        queryBuilder.Append(" MATCH (target:" + ENTITY_NAME + " { id:{ptargetId}}) ");
-                        parameters.Add("ptargetId", ((KnowledgeEntity)relationship.Value).Id);
-                    }
-                    else
-                    {
-                        await GetValueNode(relationship.Value, session);
-                        queryBuilder.Append(" MATCH (target:" + VALUE_NAME + " {value:{pvalue}})");
-                        parameters.Add("pvalue", relationship.Value);
-                    }
+            //foreach (var property in entity.Properties.Where(p => p.Value.Any(r => (!r.IsFromDatabase || r.WeightChanged))))
+            //{
+            //    foreach (var relationship in property.Value.Where(r => (!r.IsFromDatabase || r.WeightChanged)))
+            //    {
+            //        var parameters = new Dictionary<string, object>();
+            //        var queryBuilder = new StringBuilder("MATCH (entity:" + ENTITY_NAME + " { id:{pid}}) ");
+            //        if (relationship.Value is KnowledgeEntity)
+            //        {
+            //            queryBuilder.Append(" MATCH (target:" + ENTITY_NAME + " { id:{ptargetId}}) ");
+            //            parameters.Add("ptargetId", ((KnowledgeEntity)relationship.Value).Id);
+            //        }
+            //        else
+            //        {
+            //            await GetValueNode(relationship.Value, session);
+            //            queryBuilder.Append(" MATCH (target:" + VALUE_NAME + " {value:{pvalue}})");
+            //            parameters.Add("pvalue", relationship.Value);
+            //        }
 
-                    if (!relationship.IsFromDatabase)
-                    {
-                        queryBuilder.Append(" CREATE (entity)-[:" + CypherFormat(property.Key) + " {");
-                        queryBuilder.Append("weight:{pweight}}]->(target)");
-                    }
-                    else
-                    {
-                        if (relationship.WeightChanged)
-                        {
-                            queryBuilder.Append(" MATCH (entity)-[r:" + CypherFormat(property.Key) + "]->(target)");
-                            queryBuilder.Append(" SET r.weight = {pweight}");
-                        }
-                    }
+            //        if (!relationship.IsFromDatabase)
+            //        {
+            //            queryBuilder.Append(" CREATE (entity)-[:" + CypherFormat(property.Key) + " {");
+            //            queryBuilder.Append("weight:{pweight}}]->(target)");
+            //        }
+            //        else
+            //        {
+            //            if (relationship.WeightChanged)
+            //            {
+            //                queryBuilder.Append(" MATCH (entity)-[r:" + CypherFormat(property.Key) + "]->(target)");
+            //                queryBuilder.Append(" SET r.weight = {pweight}");
+            //            }
+            //        }
 
-                    parameters.Add("pid", entity.Id);
-                    //parameters.Add("pstart", DateTime.Now.Ticks);
-                    //parameters.Add("pend", 0);
-                    parameters.Add("pweight", relationship.Weight);
-                    session.Run(new Statement(queryBuilder.ToString(), parameters));
-                    relationship.IsFromDatabase = true;
-                    relationship.WeightChanged = false;
-                }
-            }
+            //        parameters.Add("pid", entity.Id);
+            //        //parameters.Add("pstart", DateTime.Now.Ticks);
+            //        //parameters.Add("pend", 0);
+            //        parameters.Add("pweight", relationship.Weight);
+            //        session.Run(new Statement(queryBuilder.ToString(), parameters));
+            //        relationship.IsFromDatabase = true;
+            //        relationship.WeightChanged = false;
+            //    }
+            //}
             return true;
         }
 
