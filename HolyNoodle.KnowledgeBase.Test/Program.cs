@@ -55,6 +55,9 @@ namespace HolyNoodle.KnowledgeBase.Test
 
             var em = new EntityManager();
             em.CreateEntity(entity);
+
+            var queryBuilder = em.GetQueryBuilder();
+            var result = queryBuilder.Clause("Name", "Tomy").Execute<Entity>();
         }
     }
 }

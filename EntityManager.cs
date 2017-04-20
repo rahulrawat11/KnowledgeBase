@@ -9,14 +9,16 @@ using System.Text;
 using System.Threading.Tasks;
 using Neo4j.Driver.V1;
 using HolyNoodle.Utility;
+using System.Dynamic;
 
 namespace HolyNoodle.KnowledgeBase
 {
     public class EntityManager
     {
         private IDriver _db;
+        public Configuration Configuration { get; internal set; }
 
-        public EntityManager(string uri = "bolt://localhost:7687", string login = "neo4j", string passwd = "lolilol")
+        public EntityManager(string uri = "bolt://localhost:7687", string login = "neo4j", string passwd = "lolilol", string entityTypeName = "Entity", string valueTypeName = "Value")
         {
             try
             {
@@ -26,6 +28,25 @@ namespace HolyNoodle.KnowledgeBase
             {
                 Console.WriteLine(ex.Message);
             }
+
+            Configuration = new Configuration
+            {
+                EntityTypeName = entityTypeName,
+                ValueTypeName = valueTypeName
+            };
+        }
+
+        public INode UpdateEntity(IEntity entity)
+        {
+            try
+            {
+
+            }
+            catch(Exception ex)
+            {
+                throw new Exception("Error while updating entity", ex);
+            }
+            return null;
         }
 
         public INode CreateEntity(object entity = null)
@@ -68,7 +89,7 @@ namespace HolyNoodle.KnowledgeBase
                             //If it's a value type (or a string !!)
                             if (ReflexionHelper.IsValueType(propType))
                             {
-                                dico[name].Add(GetNode("VALUE", value));
+                                dico[name].Add(GetNode(Configuration.ValueTypeName, value));
                             }
                             //It's an referenced type
                             else
@@ -84,7 +105,7 @@ namespace HolyNoodle.KnowledgeBase
                                     {
                                         foreach(var item in list)
                                         {
-                                            dico[name].Add(GetNode("VALUE", item));
+                                            dico[name].Add(GetNode(Configuration.ValueTypeName, item));
                                         }
                                     }
                                     //The collection seems to carry entities
@@ -149,7 +170,7 @@ namespace HolyNoodle.KnowledgeBase
 
         private IStatementResult InsertEntity()
         {
-            return _db.Session().Run(new Statement("CREATE (entity:Entity {createdDate:{tick}}) RETURN entity", new Dictionary<string, object>
+            return _db.Session().Run(new Statement($"CREATE (entity:{Configuration.EntityTypeName} {{createdDate:{{tick}}}}) RETURN entity", new Dictionary<string, object>
             {
                 {"tick", DateTime.Now.Ticks}
             }));
@@ -188,23 +209,37 @@ namespace HolyNoodle.KnowledgeBase
 
             if (node == null)
             {
-                var creatResult = _db.Session().Run(new Statement("CREATE (node:" + nodeType + " {name:{value}}) RETURN node", new Dictionary<string, object>
+                var creatResult = _db.Session().Run(new Statement("CREATE (node:" + nodeType + " {name:{value}, type:{type}}) RETURN node", new Dictionary<string, object>
                 {
-                    {"value", value}
+                    {"value", value },
+                    {"type", value.GetType().ToString() }
                 }));
                 node = GetResultFromCypherRequest("node", creatResult);
             }
             return node;
         }
 
-        public void GetEntity(Predicate<dynamic> predicate, int depth)
+        public CypherQueryBuilder GetQueryBuilder()
         {
+            return new CypherQueryBuilder(_db.Session(), Configuration);
+        }
 
+        public IEnumerable<IEntity> GetEntities(int depth = 0, int maxDeph = 1, params Predicate<object>[] predicates)
+        {
+            if (depth == maxDeph)
+                return null;
+            return null;
         }
 
         public void TransformPredicate(Predicate<dynamic> predicate)
         {
 
         }
+    }
+
+    public class Configuration
+    {
+        public string EntityTypeName { get; set; }
+        public string ValueTypeName { get; set; }
     }
 }
