@@ -21,4 +21,13 @@ namespace HolyNoodle.KnowledgeBase
         [Dal("EntityId")]
         public string EntityId { get; set; }
     }
+
+    public class Person
+    {
+        public string id { get; set; }
+        public string Name { get; set; }
+        public int Age { get; set; }
+        public ICollection<Person> Children { get; set; }
+        public Person Partner { get; set; }
+    }
 }

@@ -37,7 +37,6 @@
     </Reference>
     <Reference Include="Neo4j.Driver, Version=1.2.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>packages\Neo4j.Driver.1.2.0\lib\netstandard1.0\Neo4j.Driver.dll</HintPath>
-      <Private>True</Private>
     </Reference>
     <Reference Include="Neo4jClient, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>packages\Neo4jClient.2.0.0.7\lib\net45\Neo4jClient.dll</HintPath>
@@ -166,10 +165,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DeleteEntity.cs" />
+    <Compile Include="IEntity.cs" />
     <Compile Include="KnowledgeBase.cs" />
     <Compile Include="KnowledgeEntity.cs" />
     <Compile Include="KnowledgeDb.cs" />
-    <Compile Include="ManageEntity.cs" />
+    <Compile Include="EntityManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
