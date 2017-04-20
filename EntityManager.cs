@@ -36,17 +36,91 @@ namespace HolyNoodle.KnowledgeBase
             };
         }
 
-        public INode UpdateEntity(IEntity entity)
+        public void UpdateEntity(IEntity entity, bool impactSubEntities = false)
         {
             try
             {
+                using (var session = _db.Session())
+                {
+                    var databaseEntity = GetQueryBuilder().ById(entity.Node.Id).Execute().FirstOrDefault() as IDictionary<string, object>;
 
+                    if (databaseEntity == null) return;
+
+                    PropertyDescriptorCollection properties = TypeDescriptor.GetProperties(entity);
+                    var entityInterfaceProperties = typeof(IEntity).GetProperties();
+                    foreach (PropertyDescriptor prop in properties)
+                    {
+                        //if the property comes from the IEntity interface, just skip it
+                        if (entityInterfaceProperties.Any(p => p.Name == prop.Name)) continue;
+                        string name = prop.Name;
+                        var value = prop.GetValue(entity);
+                        var propType = prop.PropertyType;
+
+                        if (!databaseEntity.ContainsKey(name))
+                        {
+                            //TODO GET node and value
+                        }
+                        else
+                        {
+                            if (ReflexionHelper.IsValueType(propType) && databaseEntity[name] != value)
+                            {
+                                var valueNode = GetNode(Configuration.ValueTypeName, value);
+                                var oldValueNode = GetNode(Configuration.ValueTypeName, databaseEntity[name]);
+
+                                //Remove old relationship
+                                RemoveRelationshipById(entity.Node.Id, oldValueNode.Id, name);
+                                //Add new relationship
+                                AddRelationshipById(entity.Node.Id, valueNode.Id, name);
+                            }
+                            //It's an referenced type
+                            else
+                            {
+                                //We are on an object
+                                //Is it an IEnumerable ?
+                                if (ReflexionHelper.IsEnumarable(propType))
+                                {
+                                    var list = value as IEnumerable;
+                                    if (list == null) continue;
+                                    var listGenericType = ReflexionHelper.GetGenericTypeDefintion(list.GetType());
+                                    //Is the collection generic type is a value type (or a string)
+                                    if (ReflexionHelper.IsValueType(listGenericType))
+                                    {
+                                        foreach (var item in list)
+                                        {
+                                            //TODO
+                                        }
+                                    }
+                                    //The collection seems to carry entities
+                                    else
+                                    {
+                                        foreach (var item in list)
+                                        {
+                                            //TODO
+                                        }
+                                    }
+                                }
+                                //It's an entity
+                                else
+                                {
+                                    var oldEntityInterface = databaseEntity[name] as IEntity;
+                                    var entityInterface = value as IEntity;
+                                    if (oldEntityInterface != null && oldEntityInterface.Node != null && entityInterface != null)
+                                    {
+                                        //Remove old relationship
+                                        RemoveRelationshipById(entity.Node.Id, oldEntityInterface.Node.Id, name);
+                                        //Add new relationship
+                                        AddRelationshipById(entity.Node.Id, entityInterface.Node.Id, name);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 throw new Exception("Error while updating entity", ex);
             }
-            return null;
         }
 
         public INode CreateEntity(object entity = null)
@@ -58,7 +132,7 @@ namespace HolyNoodle.KnowledgeBase
                     //Create the entity node
                     var res = InsertEntity();
                     var entityNode = GetResultFromCypherRequest("entity", res);
-                    
+
                     if (entity != null)
                     {
                         var dico = new Dictionary<string, List<INode>>();
@@ -101,9 +175,9 @@ namespace HolyNoodle.KnowledgeBase
                                     var list = value as IEnumerable;
                                     var listGenericType = ReflexionHelper.GetGenericTypeDefintion(list.GetType());
                                     //Is the collection generic type is a value type (or a string)
-                                    if(ReflexionHelper.IsValueType(listGenericType))
+                                    if (ReflexionHelper.IsValueType(listGenericType))
                                     {
-                                        foreach(var item in list)
+                                        foreach (var item in list)
                                         {
                                             dico[name].Add(GetNode(Configuration.ValueTypeName, item));
                                         }
@@ -170,20 +244,38 @@ namespace HolyNoodle.KnowledgeBase
 
         private IStatementResult InsertEntity()
         {
-            return _db.Session().Run(new Statement($"CREATE (entity:{Configuration.EntityTypeName} {{createdDate:{{tick}}}}) RETURN entity", new Dictionary<string, object>
+            using (var session = _db.Session())
             {
-                {"tick", DateTime.Now.Ticks}
-            }));
+                return session.Run(new Statement($"CREATE (entity:{Configuration.EntityTypeName} {{createdDate:{{tick}}}}) RETURN entity", new Dictionary<string, object>
+                {
+                    {"tick", DateTime.Now.Ticks}
+                }));
+            }
         }
 
         // On peut enlever les retours des methodes d'ajouts de relation puisque la cypher request ne retourne rien
         private void AddRelationshipById(long srcId, long destId, string propertyName)
         {
-            _db.Session().Run(new Statement("MATCH (entity) WHERE ID(entity)={srcId} MATCH (node) WHERE ID(node)={destId} CREATE (entity)-[:" + CypherFormat(propertyName) + "]->(node)", new Dictionary<string, object>
+            using (var session = _db.Session())
             {
-                { "srcId", srcId},
-                { "destId", destId}
-            }));
+                session.Run(new Statement("MATCH (entity) WHERE ID(entity)={srcId} MATCH (node) WHERE ID(node)={destId} CREATE (entity)-[:" + CypherFormat(propertyName) + "]->(node)", new Dictionary<string, object>
+                {
+                    { "srcId", srcId},
+                    { "destId", destId}
+                }));
+            }
+        }
+
+        private void RemoveRelationshipById(long srcId, long destId, string propertyName)
+        {
+            using (var session = _db.Session())
+            {
+                session.Run(new Statement($"MATCH (entity)-[r:{propertyName}]->(value) WHERE ID(entity) = {{pEntityId}} and ID(value) = {{pValueId}} DELETE r", new Dictionary<string, object>
+                {
+                    { "pEntityId", srcId },
+                    { "pValueId", destId }
+                }));
+            }
         }
 
         private INode GetResultFromCypherRequest(string nodeName, IStatementResult result)
@@ -200,23 +292,26 @@ namespace HolyNoodle.KnowledgeBase
 
         private INode GetNode(string nodeType, object value)
         {
-            var result = _db.Session().Run(new Statement("MATCH (node:" + nodeType + " {name:{value}}) RETURN node", new Dictionary<string, object>
+            using (var session = _db.Session())
+            {
+                var result = session.Run(new Statement("MATCH (node:" + nodeType + " {name:{value}}) RETURN node", new Dictionary<string, object>
                 {
                     {"value", value}
                 }));
 
-            var node = GetResultFromCypherRequest("node", result);
+                var node = GetResultFromCypherRequest("node", result);
 
-            if (node == null)
-            {
-                var creatResult = _db.Session().Run(new Statement("CREATE (node:" + nodeType + " {name:{value}, type:{type}}) RETURN node", new Dictionary<string, object>
+                if (node == null)
+                {
+                    var creatResult = session.Run(new Statement("CREATE (node:" + nodeType + " {name:{value}, type:{type}}) RETURN node", new Dictionary<string, object>
                 {
                     {"value", value },
                     {"type", value.GetType().ToString() }
                 }));
-                node = GetResultFromCypherRequest("node", creatResult);
+                    node = GetResultFromCypherRequest("node", creatResult);
+                }
+                return node;
             }
-            return node;
         }
 
         public CypherQueryBuilder GetQueryBuilder()
@@ -234,6 +329,15 @@ namespace HolyNoodle.KnowledgeBase
         public void TransformPredicate(Predicate<dynamic> predicate)
         {
 
+        }
+    }
+
+
+    public static class IEntityExtensions
+    {
+        public static void Update(this IEntity entity, EntityManager em, bool impactSubEntities = false)
+        {
+            em.UpdateEntity(entity, impactSubEntities);
         }
     }
 

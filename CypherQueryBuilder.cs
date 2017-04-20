@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace HolyNoodle.KnowledgeBase
 {
-    public class CypherQueryBuilder
+    public class CypherQueryBuilder : IDisposable
     {
         private StringBuilder _query;
         private int _clauseNumber;
@@ -84,6 +84,16 @@ namespace HolyNoodle.KnowledgeBase
             ++_clauseNumber;
 
             //return this for chaining purpose
+            return this;
+        }
+
+        public CypherQueryBuilder ById(long nodeId)
+        {
+            _query = new StringBuilder("MATCH (entity) WHERE ID(entity) = {pId}");
+            if(!_clausesParameters.ContainsKey("pId"))
+            {
+                _clausesParameters.Add("pId", nodeId);
+            }
             return this;
         }
 
@@ -189,5 +199,18 @@ namespace HolyNoodle.KnowledgeBase
             return entities.Values;
         }
 
+        public void Dispose()
+        {
+            try
+            {
+                _session.Dispose();
+            }
+            finally
+            {
+                _query = null;
+                _clausesParameters = null;
+                _clauseNumber = 0;
+            }
+        }
     }
 }
