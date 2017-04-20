@@ -2,6 +2,7 @@
 using Neo4j.Driver.V1;
 using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -101,7 +102,47 @@ namespace HolyNoodle.KnowledgeBase
             return (T)(object)null;
         }
 
-        //TODO Same for no type
+        private IStatementResult ExecuteQuery()
+        {
+            //We append the expected return information in the right format
+            //Here we match all the nodes related to an entity
+            _query.Append("MATCH (entity)-[rel]->(value) RETURN entity, rel, value");
+            return _session.Run(_query.ToString(), _clausesParameters);
+        }
+
+        /// <summary>
+        /// Execute the query on the session.
+        /// Returns a list of the entities found
+        /// </summary>
+        /// <returns>List of the dynamic entities</returns>
+        public IEnumerable<dynamic> Execute()
+        {
+            var result = ExecuteQuery();
+            //Declaring a dictionnary because we get from neo4j a table of all entities with all the relationship
+            //So, in order to not have to manage the order of the result, I store the instance of the entity in this object
+            //retrieved by the entity node id
+            var entities = new Dictionary<long, dynamic>();
+            foreach (var r in result)
+            {
+                //Get the node and create the object in the dictionary if not already exists
+                var entity = r.Values["entity"] as INode;
+                if (!entities.ContainsKey(entity.Id))
+                {
+                    entities.Add(entity.Id, new ExpandoObject());
+                }
+
+                //Get the instance
+                var instance = entities[entity.Id] as IDictionary<string, object>;
+                //Get the relationship
+                var relation = r.Values["rel"] as IRelationship;
+                //Get the value node
+                var valueNode = r.Values["value"] as INode;
+                //Set the property on the instance of the object
+                instance.Add(relation.Type, valueNode.Properties["name"]);
+            }
+            return entities.Values;
+        }
+
         /// <summary>
         /// Execute the query on the session.
         /// Returns a list of the entities found
@@ -110,15 +151,12 @@ namespace HolyNoodle.KnowledgeBase
         /// <returns>List of the strongly typed in T entities</returns>
         public IEnumerable<T> Execute<T>()
         {
-            //We append the expected return information in the right format
-            //Here we match all the nodes related to an entity
-            _query.Append("MATCH (entity)-[rel]->(value) RETURN entity, rel, value");
-            var result = _session.Run(_query.ToString(), _clausesParameters);
+            var result = ExecuteQuery();
             //Declaring a dictionnary because we get from neo4j a table of all entities with all the relationship
             //So, in order to not have to manage the order of the result, I store the instance of the entity in this object
             //retrieved by the entity node id
             var entities = new Dictionary<long, T>();
-            foreach(var r in result)
+            foreach (var r in result)
             {
                 //Get the node and create the object in the dictionary if not already exists
                 var entity = r.Values["entity"] as INode;
@@ -134,7 +172,7 @@ namespace HolyNoodle.KnowledgeBase
                 //Get the property related to the property
                 var property = typeof(T).GetProperty(relation.Type);
                 //If the property exists in the expected result object
-                if(property != null)
+                if (property != null)
                 {
                     //Get the value node
                     var valueNode = r.Values["value"] as INode;
