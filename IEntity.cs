@@ -11,8 +11,6 @@ namespace HolyNoodle.KnowledgeBase
     public interface IEntity
     {
         [SkipProperty]
-        long EntityId { get; set; }
-        [SkipProperty]
         INode Node { get; set; }
     }
 

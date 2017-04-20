@@ -16,7 +16,6 @@ namespace HolyNoodle.KnowledgeBase.Test
         public List<string> list { get; set; }
         public List<Entity> Children { get; set; }
         public Entity InARelationship { get; set; }
-        public long EntityId { get; set; }
         public INode Node { get; set; }
     }
     class Program

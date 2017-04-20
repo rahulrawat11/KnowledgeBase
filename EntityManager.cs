@@ -16,7 +16,7 @@ namespace HolyNoodle.KnowledgeBase
     {
         private IDriver _db;
 
-        public EntityManager(string uri = "bolt://localhost:7687", string login = "neo4j", string passwd = "WQI167943")
+        public EntityManager(string uri = "bolt://localhost:7687", string login = "neo4j", string passwd = "lolilol")
         {
             try
             {
