@@ -34,7 +34,7 @@ namespace HolyNoodle.KnowledgeBase.Test
                 {
                     Age = 11,
                     Name = "Tomy",
-                    Weight = 40.8
+                    Weight = 35.7
                 },
                 new Entity
                 {
@@ -48,8 +48,10 @@ namespace HolyNoodle.KnowledgeBase.Test
                 Name = "Claire",
                 Age = 42,
                 Weight = 25.4,
-                Children = entity.Children,
-                InARelationship = entity
+                //Reference the "Kevin" entity
+                InARelationship = entity,
+                //reference the "Kevin"'s children entity, because they got exactly the same children
+                Children = entity.Children
             };
 
             var em = new EntityManager();
