@@ -339,6 +339,19 @@ namespace HolyNoodle.KnowledgeBase
         {
             em.UpdateEntity(entity, impactSubEntities);
         }
+
+        public static IEntity Populate(this IEntity entity, EntityManager em)
+        {
+            using (var qb = em.GetQueryBuilder().ById(entity.Node.Id))
+            {
+                var entityType = entity.GetType();
+                var method = ReflexionHelper.GetMethod(qb.GetType(), "Execute", true);
+                var result = (ICollection)method.MakeGenericMethod(entityType).Invoke(qb, null);
+                foreach (var r in result)
+                    return (IEntity)r;                
+            }
+            return null;
+        }
     }
 
     public class Configuration

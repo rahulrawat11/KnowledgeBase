@@ -58,13 +58,16 @@ namespace HolyNoodle.KnowledgeBase.Test
 
             using (var queryBuilder = em.GetQueryBuilder())
             {
-                var resultDynamic = queryBuilder.Clause("Name", "Tomy").Execute();
-                var resultTyped = queryBuilder.Clause("Name", "Tomy").Execute<Entity>();
+                //var resultDynamic = queryBuilder.Clause("InARelationship", entity.InARelationship).Execute();
+                var resultTyped = queryBuilder.Clause("Children", entity.Children[0]).Execute<Entity>();
 
-                var randomUpdateIndex = 0;
-                var tomy = resultTyped.ToList()[0];
-                tomy.Name = "TomyUpdate";
-                tomy.Update(em);
+                var list = resultTyped.ToList();
+                list[0].Children[0] = list[0].Children[0].Populate(em) as Entity;
+
+                //var randomUpdateIndex = 0;
+                //var tomy = resultTyped.ToList()[0];
+                //tomy.Name = "TomyUpdate";
+                //tomy.Update(em);
             }
         }
     }

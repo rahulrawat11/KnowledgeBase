@@ -1,6 +1,7 @@
 ﻿using HolyNoodle.Utility;
 using Neo4j.Driver.V1;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.Linq;
@@ -63,18 +64,32 @@ namespace HolyNoodle.KnowledgeBase
                     //If list geniric type is value type
                     if (ReflexionHelper.IsValueType(listGenericType))
                     {
-                        //Match the node then add the value to parameters
-                        _query.Append($" MATCH (value{_clauseNumber}:{Configuration.ValueTypeName} {{name:{{pValue{_clauseNumber}}}}})");
-                        _clausesParameters.Add($"pValue{_clauseNumber}", value);
+                        foreach (var item in value as IEnumerable<object>)
+                        {
+                            //Match the node then add the value to parameters
+                            _query.Append($" MATCH (value{_clauseNumber}:{Configuration.ValueTypeName} {{name:{{pValue{_clauseNumber}}}}})");
+                            _clausesParameters.Add($"pValue{_clauseNumber}", item);
+                        }
                     }
                     else
                     {
-                        //Manage list of subentities
+                        foreach (var item in value as IEnumerable<object>)
+                        {
+                            if (item is IEntity)
+                            {
+                                _query.Append($" MATCH (value{_clauseNumber}:{Configuration.EntityTypeName}) WHERE ID(value{_clauseNumber}) = {{pValue{_clauseNumber}}}");
+                                _clausesParameters.Add($"pValue{_clauseNumber}", ((IEntity)item).Node.Id);
+                            }
+                        }
                     }
                 }
                 else
                 {
-                    //TODO manage subentity
+                    if (value is IEntity)
+                    {
+                        _query.Append($" MATCH (value{_clauseNumber}:{Configuration.EntityTypeName}) WHERE ID(value{_clauseNumber}) = {{pValue{_clauseNumber}}}");
+                        _clausesParameters.Add($"pValue{_clauseNumber}", ((IEntity)value).Node.Id);
+                    }
                 }
             }
             //Convergence to the central entity
@@ -90,7 +105,7 @@ namespace HolyNoodle.KnowledgeBase
         public CypherQueryBuilder ById(long nodeId)
         {
             _query = new StringBuilder("MATCH (entity) WHERE ID(entity) = {pId}");
-            if(!_clausesParameters.ContainsKey("pId"))
+            if (!_clausesParameters.ContainsKey("pId"))
             {
                 _clausesParameters.Add("pId", nodeId);
             }
@@ -148,7 +163,10 @@ namespace HolyNoodle.KnowledgeBase
                 //Get the value node
                 var valueNode = r.Values["value"] as INode;
                 //Set the property on the instance of the object
-                instance.Add(relation.Type, valueNode.Properties["name"]);
+                if (!instance.ContainsKey(relation.Type))
+                {
+                    instance.Add(relation.Type, valueNode.Labels.Contains("name") ? valueNode.Properties["name"] : valueNode.Id);
+                }
             }
             return entities.Values;
         }
@@ -191,9 +209,35 @@ namespace HolyNoodle.KnowledgeBase
                 {
                     //Get the value node
                     var valueNode = r.Values["value"] as INode;
-                    //Set the property on the instance of the object
-                    //ChangeType is meant to prevent flaw in casting system  (Int64 to Int32 casts for example)
-                    property.SetValue(instance, Convert.ChangeType(valueNode.Properties["name"], property.PropertyType));
+                    if (ReflexionHelper.IsValueType(property.PropertyType))
+                    {
+                        //Set the property on the instance of the object
+                        //ChangeType is meant to prevent flaw in casting system  (Int64 to Int32 casts for example)
+                        property.SetValue(instance, Convert.ChangeType(valueNode.Properties["name"], property.PropertyType));
+                    }
+                    else
+                    {
+                        if (ReflexionHelper.IsEnumarable(property.PropertyType))
+                        {
+                            var genericType = ReflexionHelper.GetGenericTypeDefintion(property.PropertyType);
+                            if (property.GetValue(instance) == null)
+                            {
+                                var constructedListType = typeof(List<>).MakeGenericType(genericType);
+                                property.SetValue(instance, Activator.CreateInstance(constructedListType));
+                            }
+
+                            if (ReflexionHelper.IsValueType(genericType))
+                            {
+                                (property.GetValue(instance) as IList).Add(valueNode.Properties["name"]);
+                            }
+                            else
+                            {
+                                var subentity = (IEntity)Activator.CreateInstance(genericType);
+                                subentity.Node = valueNode;
+                                (property.GetValue(instance) as IList).Add(subentity);
+                            }
+                        }
+                    }
                 }
             }
             return entities.Values;
