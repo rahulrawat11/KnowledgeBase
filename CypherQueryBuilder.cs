@@ -24,6 +24,17 @@ namespace HolyNoodle.KnowledgeBase
             Configuration = configuration;
         }
 
+        /// <summary>
+        /// Chaining the clauses needs to stay simple.
+        /// Here for each clause we seek for the value node.
+        /// Then we link it to the searched entity.
+        /// At the execution time, the expected behavior is the following :
+        /// Match all the value nodes to filter on
+        /// then look for entities that are linked to them
+        /// </summary>
+        /// <param name="propertyName">Name of the property you want to filter on</param>
+        /// <param name="value">value you are seeking for this property</param>
+        /// <returns></returns>
         public CypherQueryBuilder Clause(string propertyName, object value)
         {
             //Chaining the clauses needs to stay simple.
@@ -90,6 +101,13 @@ namespace HolyNoodle.KnowledgeBase
             return (T)(object)null;
         }
 
+        //TODO Same for no type
+        /// <summary>
+        /// Execute the query on the session.
+        /// Returns a list of the entities found
+        /// </summary>
+        /// <typeparam name="T">Type of the entity you want to get</typeparam>
+        /// <returns>List of the strongly typed in T entities</returns>
         public IEnumerable<T> Execute<T>()
         {
             //We append the expected return information in the right format
