@@ -106,8 +106,7 @@ namespace HolyNoodle.KnowledgeBase
         {
             //We append the expected return information in the right format
             //Here we match all the nodes related to an entity
-            _query.Append("MATCH (entity)-[rel]->(value) RETURN entity, rel, value");
-            return _session.Run(_query.ToString(), _clausesParameters);
+            return _session.Run(_query.ToString() + "MATCH (entity)-[rel]->(value) RETURN entity, rel, value", _clausesParameters);
         }
 
         /// <summary>
@@ -125,14 +124,15 @@ namespace HolyNoodle.KnowledgeBase
             foreach (var r in result)
             {
                 //Get the node and create the object in the dictionary if not already exists
-                var entity = r.Values["entity"] as INode;
-                if (!entities.ContainsKey(entity.Id))
+                var entityNode = r.Values["entity"] as INode;
+                if (!entities.ContainsKey(entityNode.Id))
                 {
-                    entities.Add(entity.Id, new ExpandoObject());
+                    entities.Add(entityNode.Id, new ExpandoObject());
+                    entities[entityNode.Id].Node = entityNode;
                 }
 
                 //Get the instance
-                var instance = entities[entity.Id] as IDictionary<string, object>;
+                var instance = entities[entityNode.Id] as IDictionary<string, object>;
                 //Get the relationship
                 var relation = r.Values["rel"] as IRelationship;
                 //Get the value node
@@ -159,14 +159,19 @@ namespace HolyNoodle.KnowledgeBase
             foreach (var r in result)
             {
                 //Get the node and create the object in the dictionary if not already exists
-                var entity = r.Values["entity"] as INode;
-                if (!entities.ContainsKey(entity.Id))
+                var entityNode = r.Values["entity"] as INode;
+                if (!entities.ContainsKey(entityNode.Id))
                 {
-                    entities.Add(entity.Id, (T)Activator.CreateInstance(typeof(T)));
+                    var tempInstance = (T)Activator.CreateInstance(typeof(T));
+                    entities.Add(entityNode.Id, tempInstance);
+                    if (tempInstance is IEntity)
+                    {
+                        ((IEntity)tempInstance).Node = entityNode;
+                    }
                 }
 
                 //Get the instance
-                var instance = entities[entity.Id];
+                var instance = entities[entityNode.Id];
                 //Get the relationship
                 var relation = r.Values["rel"] as IRelationship;
                 //Get the property related to the property
