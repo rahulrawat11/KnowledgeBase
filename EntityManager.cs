@@ -148,11 +148,11 @@ namespace HolyNoodle.KnowledgeBase
                             //if the property comes from the IEntity interface, just skip it
                             if (entityInterfaceProperties.Any(p => p.Name == prop.Name)) continue;
 
-                            string name = prop.Name;
                             var value = prop.GetValue(entity);
-                            var propType = prop.PropertyType;
-
                             if (value == null) continue; //don't create the relation if there is no value in it
+
+                            var propType = prop.PropertyType;
+                            string name = prop.Name;
 
                             //Should be true all the time but manage to prevent errors
                             if (!dico.ContainsKey(name))
@@ -340,17 +340,17 @@ namespace HolyNoodle.KnowledgeBase
             em.UpdateEntity(entity, impactSubEntities);
         }
 
-        public static IEntity Populate(this IEntity entity, EntityManager em)
+        public static T Populate<T>(this IEntity entity, EntityManager em) where T : IEntity
         {
             using (var qb = em.GetQueryBuilder().ById(entity.Node.Id))
             {
-                var entityType = entity.GetType();
+                var entityType = typeof(T);
                 var method = ReflexionHelper.GetMethod(qb.GetType(), "Execute", true);
-                var result = (ICollection)method.MakeGenericMethod(entityType).Invoke(qb, null);
+                var result = (IEnumerable)method.MakeGenericMethod(entityType).Invoke(qb, null);
                 foreach (var r in result)
-                    return (IEntity)r;                
+                    return (T)r;                
             }
-            return null;
+            return (T)(object)null;
         }
     }
 

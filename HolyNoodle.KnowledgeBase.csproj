@@ -166,6 +166,7 @@
   <ItemGroup>
     <Compile Include="CypherQueryBuilder.cs" />
     <Compile Include="DeleteEntity.cs" />
+    <Compile Include="EntityNode.cs" />
     <Compile Include="IEntity.cs" />
     <Compile Include="KnowledgeBase.cs" />
     <Compile Include="KnowledgeEntity.cs" />

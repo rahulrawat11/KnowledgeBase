@@ -1,15 +1,14 @@
-﻿using Neo4j.Driver.V1;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using Neo4j.Driver.V1;
 
 namespace HolyNoodle.KnowledgeBase
 {
-    public interface IEntity
+    public class EntityNode : IEntity
     {
-        INode Node { get; set; }
+        public INode Node { get; set; }
     }
 }

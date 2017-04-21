@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Neo4j.Driver.V1;
+using System.Collections;
 
 namespace HolyNoodle.KnowledgeBase.Test
 {
@@ -15,7 +16,7 @@ namespace HolyNoodle.KnowledgeBase.Test
         public string Name { get; set; }
         public List<string> list { get; set; }
         public List<Entity> Children { get; set; }
-        public Entity InARelationship { get; set; }
+        public Entity Partner { get; set; }
         public INode Node { get; set; }
     }
     class Program
@@ -42,13 +43,13 @@ namespace HolyNoodle.KnowledgeBase.Test
                     Weight = 40.8
                 },
             };
-            entity.InARelationship = new Entity
+            entity.Partner = new Entity
             {
                 Name = "Claire",
                 Age = 42,
                 Weight = 25.4,
                 //Reference the "Kevin" entity
-                InARelationship = entity,
+                Partner = entity,
                 //reference the "Kevin"'s children entity, because they got exactly the same children
                 Children = entity.Children
             };
@@ -58,11 +59,9 @@ namespace HolyNoodle.KnowledgeBase.Test
 
             using (var queryBuilder = em.GetQueryBuilder())
             {
-                //var resultDynamic = queryBuilder.Clause("InARelationship", entity.InARelationship).Execute();
-                var resultTyped = queryBuilder.Clause("Children", entity.Children[0]).Execute<Entity>();
-
+                var resultTyped = queryBuilder.Equals<Entity>(e => e.Partner.Name, "Claire").Execute<Entity>();
                 var list = resultTyped.ToList();
-                list[0].Children[0] = list[0].Children[0].Populate(em) as Entity;
+                list[0].Partner = list[0].Partner.Populate<Entity>(em);
 
                 //var randomUpdateIndex = 0;
                 //var tomy = resultTyped.ToList()[0];

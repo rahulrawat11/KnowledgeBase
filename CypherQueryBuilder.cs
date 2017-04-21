@@ -5,6 +5,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -16,6 +18,7 @@ namespace HolyNoodle.KnowledgeBase
         private int _clauseNumber;
         private Dictionary<string, object> _clausesParameters;
         private ISession _session;
+        private string _lastChainName = "";
         public Configuration Configuration { get; internal set; }
 
         public CypherQueryBuilder(ISession session, Configuration configuration)
@@ -24,6 +27,52 @@ namespace HolyNoodle.KnowledgeBase
             _query = new StringBuilder();
             _clausesParameters = new Dictionary<string, object>();
             Configuration = configuration;
+        }
+
+        private void CreateClause(object value)
+        {
+            _query.Append($" MATCH (value{_clauseNumber}:");
+            if (ReflexionHelper.IsValueType(value.GetType()))
+            {
+                _query.Append($"{Configuration.ValueTypeName} {{name:{{pValue{_clauseNumber}}}}})");
+                _clausesParameters.Add($"pValue{_clauseNumber}", value);
+            }
+            else
+            {
+                _query.Append($"{Configuration.EntityTypeName}) WHERE ID(value{_clauseNumber}) = {{pValue{_clauseNumber}}}");
+                _clausesParameters.Add($"pValue{_clauseNumber}", ((IEntity)value).Node.Id);
+            }
+
+            //Clause number is here to chain clauses and have unique variable and parameter name
+            ++_clauseNumber;
+        }
+        private void CreatePath(Expression exp, int depth = 0)
+        {
+            if (exp.NodeType == ExpressionType.MemberAccess)
+            {
+                var memberExpression = ((MemberExpression)exp);
+                CreatePath(memberExpression.Expression, depth + 1);
+                if (_lastChainName == string.Empty) _lastChainName = "entity";
+                _query.Append($" MATCH ({_lastChainName})-[:{memberExpression.Member.Name}]->(children{depth}_{_clauseNumber})");
+                _lastChainName = $"children{depth}_{_clauseNumber}";
+            }
+            if(exp.NodeType == ExpressionType.Call)
+            {
+                CreatePath(((MethodCallExpression)exp).Object, depth + 1);
+            }
+            if (exp.NodeType == ExpressionType.Convert)
+            {
+                CreatePath(((UnaryExpression)exp).Operand, depth + 1);
+            }
+        }
+
+        public CypherQueryBuilder LowerThan<T>(Expression<Func<T, object>> lambda, object value)
+        {
+            _lastChainName = "";
+            CreatePath(lambda.Body);
+            _query.Append($"WHERE {_lastChainName}.name < {{pValue}}");
+
+            return this;
         }
 
         /// <summary>
@@ -37,8 +86,11 @@ namespace HolyNoodle.KnowledgeBase
         /// <param name="propertyName">Name of the property you want to filter on</param>
         /// <param name="value">value you are seeking for this property</param>
         /// <returns></returns>
-        public CypherQueryBuilder Clause(string propertyName, object value)
+        public CypherQueryBuilder Equals<T>(Expression<Func<T, object>> lambda, object value)
         {
+            _lastChainName = string.Empty;
+            CreatePath(lambda.Body);
+
             //Chaining the clauses needs to stay simple.
             //Here for each clause we seek for the value node
             //then we link it to the searched entity
@@ -50,53 +102,14 @@ namespace HolyNoodle.KnowledgeBase
             //If value is value type
             if (ReflexionHelper.IsValueType(valueType))
             {
-                //Match the node then add the value to parameters
-                _query.Append($" MATCH (value{_clauseNumber}:{Configuration.ValueTypeName} {{name:{{pValue{_clauseNumber}}}}})");
+                _query.Append($"WHERE {_lastChainName}.name = {{pValue{_clauseNumber}}}");
                 _clausesParameters.Add($"pValue{_clauseNumber}", value);
             }
-            else
+            else if (value is IEntity)
             {
-                //It's a non value type !
-                //If it's an enumerable
-                if (ReflexionHelper.IsEnumarable(valueType))
-                {
-                    var listGenericType = ReflexionHelper.GetGenericTypeDefintion(valueType);
-                    //If list geniric type is value type
-                    if (ReflexionHelper.IsValueType(listGenericType))
-                    {
-                        foreach (var item in value as IEnumerable<object>)
-                        {
-                            //Match the node then add the value to parameters
-                            _query.Append($" MATCH (value{_clauseNumber}:{Configuration.ValueTypeName} {{name:{{pValue{_clauseNumber}}}}})");
-                            _clausesParameters.Add($"pValue{_clauseNumber}", item);
-                        }
-                    }
-                    else
-                    {
-                        foreach (var item in value as IEnumerable<object>)
-                        {
-                            if (item is IEntity)
-                            {
-                                _query.Append($" MATCH (value{_clauseNumber}:{Configuration.EntityTypeName}) WHERE ID(value{_clauseNumber}) = {{pValue{_clauseNumber}}}");
-                                _clausesParameters.Add($"pValue{_clauseNumber}", ((IEntity)item).Node.Id);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (value is IEntity)
-                    {
-                        _query.Append($" MATCH (value{_clauseNumber}:{Configuration.EntityTypeName}) WHERE ID(value{_clauseNumber}) = {{pValue{_clauseNumber}}}");
-                        _clausesParameters.Add($"pValue{_clauseNumber}", ((IEntity)value).Node.Id);
-                    }
-                }
+                _query.Append($"WHERE ID({_lastChainName}) = {{pValue{_clauseNumber}}}");
+                _clausesParameters.Add($"pValue{_clauseNumber}", ((IEntity)value).Node.Id);
             }
-            //Convergence to the central entity
-            _query.Append($" MATCH (entity:{Configuration.EntityTypeName})-[rel{_clauseNumber}:{propertyName}]->(value{_clauseNumber})");
-
-            //Clause number is here to chain clauses and have unique variable and parameter name
-            ++_clauseNumber;
 
             //return this for chaining purpose
             return this;
@@ -165,7 +178,38 @@ namespace HolyNoodle.KnowledgeBase
                 //Set the property on the instance of the object
                 if (!instance.ContainsKey(relation.Type))
                 {
-                    instance.Add(relation.Type, valueNode.Labels.Contains("name") ? valueNode.Properties["name"] : valueNode.Id);
+                    if (valueNode.Labels.Contains("name"))
+                    {
+                        instance.Add(relation.Type, valueNode.Properties["name"]);
+                    }
+                    else
+                    {
+                        var value = new EntityNode();
+                        value.Node = valueNode;
+                        instance.Add(relation.Type, value);
+                    }
+                }
+                else
+                {
+                    var targetedType = instance[relation.Type].GetType();
+                    if (!ReflexionHelper.IsEnumarable(targetedType))
+                    {
+                        var constructedListType = typeof(List<>).MakeGenericType(targetedType);
+                        var list = Activator.CreateInstance(constructedListType) as IList;
+                        list.Add(instance[relation.Type]);
+                        instance[relation.Type] = list;
+                    }
+
+                    if (valueNode.Labels.Contains("name"))
+                    {
+                        (instance[relation.Type] as IList).Add(valueNode.Properties["name"]);
+                    }
+                    else
+                    {
+                        var value = new EntityNode();
+                        value.Node = valueNode;
+                        (instance[relation.Type] as IList).Add(value);
+                    }
                 }
             }
             return entities.Values;
@@ -236,6 +280,12 @@ namespace HolyNoodle.KnowledgeBase
                                 subentity.Node = valueNode;
                                 (property.GetValue(instance) as IList).Add(subentity);
                             }
+                        }
+                        else
+                        {
+                            var subentity = (IEntity)Activator.CreateInstance(property.PropertyType);
+                            subentity.Node = valueNode;
+                            property.SetValue(instance, subentity);
                         }
                     }
                 }
