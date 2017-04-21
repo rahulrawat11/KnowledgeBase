@@ -59,7 +59,7 @@ namespace HolyNoodle.KnowledgeBase.Test
 
             using (var queryBuilder = em.GetQueryBuilder())
             {
-                var resultTyped = queryBuilder.Equals<Entity>(e => e.Partner.Name, "Claire").Execute<Entity>();
+                var resultTyped = queryBuilder.Where<Entity>(e => e.Partner.Name.Contains("lai")).Execute<Entity>();
                 var list = resultTyped.ToList();
                 list[0].Partner = list[0].Partner.Populate<Entity>(em);
 

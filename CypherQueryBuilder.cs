@@ -29,23 +29,6 @@ namespace HolyNoodle.KnowledgeBase
             Configuration = configuration;
         }
 
-        private void CreateClause(object value)
-        {
-            _query.Append($" MATCH (value{_clauseNumber}:");
-            if (ReflexionHelper.IsValueType(value.GetType()))
-            {
-                _query.Append($"{Configuration.ValueTypeName} {{name:{{pValue{_clauseNumber}}}}})");
-                _clausesParameters.Add($"pValue{_clauseNumber}", value);
-            }
-            else
-            {
-                _query.Append($"{Configuration.EntityTypeName}) WHERE ID(value{_clauseNumber}) = {{pValue{_clauseNumber}}}");
-                _clausesParameters.Add($"pValue{_clauseNumber}", ((IEntity)value).Node.Id);
-            }
-
-            //Clause number is here to chain clauses and have unique variable and parameter name
-            ++_clauseNumber;
-        }
         private void CreatePath(Expression exp, int depth = 0)
         {
             if (exp.NodeType == ExpressionType.MemberAccess)
@@ -56,7 +39,7 @@ namespace HolyNoodle.KnowledgeBase
                 _query.Append($" MATCH ({_lastChainName})-[:{memberExpression.Member.Name}]->(children{depth}_{_clauseNumber})");
                 _lastChainName = $"children{depth}_{_clauseNumber}";
             }
-            if(exp.NodeType == ExpressionType.Call)
+            if (exp.NodeType == ExpressionType.Call)
             {
                 CreatePath(((MethodCallExpression)exp).Object, depth + 1);
             }
@@ -66,52 +49,70 @@ namespace HolyNoodle.KnowledgeBase
             }
         }
 
-        public CypherQueryBuilder LowerThan<T>(Expression<Func<T, object>> lambda, object value)
+        public CypherQueryBuilder Where<T>(Expression<Func<T, bool>> lambda)
+        {
+            _lastChainName = "";
+            dynamic value = null;
+            var ope = "";
+            if (lambda.Body.NodeType == ExpressionType.Call)
+            {
+                var methodExpression = (MethodCallExpression)lambda.Body;
+                CreatePath(methodExpression.Object);
+                switch (methodExpression.Method.Name)
+                {
+                    //Like
+                    case "Contains":
+                        ope = "=~";
+                        value = ".*" + ((ConstantExpression)methodExpression.Arguments.First()).Value.ToString() + ".*";
+                        break;
+                    case "StartWith":
+                        ope = "=~";
+                        value = ((ConstantExpression)methodExpression.Arguments.First()).Value.ToString() + ".*";
+                        break;
+                    case "EndWidth":
+                        ope = "=~";
+                        value = ".*" + ((ConstantExpression)methodExpression.Arguments.First()).Value.ToString();
+                        break;
+                }
+            }
+            else
+            {
+                var binaryExpression = (BinaryExpression)lambda.Body;
+                CreatePath(binaryExpression.Left);
+                value = binaryExpression.Right;
+                switch (binaryExpression.NodeType)
+                {
+                    case ExpressionType.Equal:
+                        ope = "=";
+                        break;
+                    case ExpressionType.LessThan:
+                        ope = "<";
+                        break;
+                    case ExpressionType.LessThanOrEqual:
+                        ope = "<=";
+                        break;
+                    case ExpressionType.GreaterThan:
+                        ope = "<=";
+                        break;
+                    case ExpressionType.GreaterThanOrEqual:
+                        ope = "<=";
+                        break;
+                }
+            }
+
+            _query.Append($" WHERE {_lastChainName}.name {ope} {{pValue{_clauseNumber}}}");
+            _clausesParameters.Add($"pValue{_clauseNumber}", value);
+            ++_clauseNumber;
+            return this;
+        }
+        public CypherQueryBuilder Where<T>(Expression<Func<T, IEntity>> lambda, long nodeId)
         {
             _lastChainName = "";
             CreatePath(lambda.Body);
-            _query.Append($"WHERE {_lastChainName}.name < {{pValue}}");
 
-            return this;
-        }
-
-        /// <summary>
-        /// Chaining the clauses needs to stay simple.
-        /// Here for each clause we seek for the value node.
-        /// Then we link it to the searched entity.
-        /// At the execution time, the expected behavior is the following :
-        /// Match all the value nodes to filter on
-        /// then look for entities that are linked to them
-        /// </summary>
-        /// <param name="propertyName">Name of the property you want to filter on</param>
-        /// <param name="value">value you are seeking for this property</param>
-        /// <returns></returns>
-        public CypherQueryBuilder Equals<T>(Expression<Func<T, object>> lambda, object value)
-        {
-            _lastChainName = string.Empty;
-            CreatePath(lambda.Body);
-
-            //Chaining the clauses needs to stay simple.
-            //Here for each clause we seek for the value node
-            //then we link it to the searched entity
-            //At the execution time, the expected behavior is the following
-            //Match all the value nodes to filter on
-            //then look for entities that are linked to them
-
-            var valueType = value.GetType();
-            //If value is value type
-            if (ReflexionHelper.IsValueType(valueType))
-            {
-                _query.Append($"WHERE {_lastChainName}.name = {{pValue{_clauseNumber}}}");
-                _clausesParameters.Add($"pValue{_clauseNumber}", value);
-            }
-            else if (value is IEntity)
-            {
-                _query.Append($"WHERE ID({_lastChainName}) = {{pValue{_clauseNumber}}}");
-                _clausesParameters.Add($"pValue{_clauseNumber}", ((IEntity)value).Node.Id);
-            }
-
-            //return this for chaining purpose
+            _query.Append($" WHERE ID({_lastChainName}).name = {{pValue{_clauseNumber}}}");
+            _clausesParameters.Add($"pValue{_clauseNumber}", nodeId);
+            ++_clauseNumber;
             return this;
         }
 
