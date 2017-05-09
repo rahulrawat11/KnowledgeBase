@@ -47,6 +47,23 @@ namespace HolyNoodle.KnowledgeBase
             }
         }
 
+        public CypherQueryBuilder Where<T>(string left, string operation, object value)
+        {
+            var leftTab = left.Split('.');
+            
+            for(var i = 0; i < leftTab.Length; ++i)
+            {
+                if (_lastChainName == string.Empty) _lastChainName = "entity";
+                _query.Append($" MATCH ({_lastChainName})-[:{leftTab[i]}]->(children{i}_{_clauseNumber})");
+                _lastChainName = $"children{i}_{_clauseNumber}";
+            }
+
+            _query.Append($" WHERE {_lastChainName}.name {operation} {{pValue{_clauseNumber}}}");
+            _clausesParameters.Add($"pValue{_clauseNumber}", value);
+            ++_clauseNumber;
+            return this;
+        }
+
         public CypherQueryBuilder Where<T>(Expression<Func<T, bool>> lambda)
         {
             _lastChainName = "";
@@ -177,7 +194,7 @@ namespace HolyNoodle.KnowledgeBase
                 //Set the property on the instance of the object
                 if (!instance.ContainsKey(relation.Type))
                 {
-                    if (valueNode.Labels.Contains("name"))
+                    if (valueNode.Labels.Contains("Value"))
                     {
                         instance.Add(relation.Type, valueNode.Properties["name"]);
                     }

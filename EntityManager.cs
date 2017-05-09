@@ -140,19 +140,43 @@ namespace HolyNoodle.KnowledgeBase
                         {
                             ((IEntity)entity).Node = entityNode;
                         }
+
+                        var properties = new List<Tuple<string, dynamic, Type>>();
+
                         //Loop over the properties of the object passed in parameters
-                        PropertyDescriptorCollection properties = TypeDescriptor.GetProperties(entity);
+                        if (entity is ExpandoObject)
+                        {
+                            foreach (var prop in entity as IDictionary<string, object>)
+                            {
+                                properties.Add(new Tuple<string, dynamic, Type>(
+                                        prop.Key,
+                                        prop.Value,
+                                        prop.Value.GetType()
+                                    ));
+                            }
+                        }
+                        else {
+
+                            foreach (PropertyDescriptor prop in TypeDescriptor.GetProperties(entity))
+                            {
+                                properties.Add(new Tuple<string, dynamic, Type>(
+                                        prop.Name,
+                                        prop.GetValue(entity),
+                                        prop.PropertyType
+                                    ));
+                            }
+                        }
                         var entityInterfaceProperties = typeof(IEntity).GetProperties();
-                        foreach (PropertyDescriptor prop in properties)
+                        foreach (var prop in properties)
                         {
                             //if the property comes from the IEntity interface, just skip it
-                            if (entityInterfaceProperties.Any(p => p.Name == prop.Name)) continue;
+                            if (entityInterfaceProperties.Any(p => p.Name == prop.Item1)) continue;
 
-                            var value = prop.GetValue(entity);
+                            var value = prop.Item2;
                             if (value == null) continue; //don't create the relation if there is no value in it
 
-                            var propType = prop.PropertyType;
-                            string name = prop.Name;
+                            var propType = prop.Item3;
+                            string name = prop.Item1;
 
                             //Should be true all the time but manage to prevent errors
                             if (!dico.ContainsKey(name))
@@ -170,46 +194,61 @@ namespace HolyNoodle.KnowledgeBase
                             {
                                 //We are on an object
                                 //Is it an IEnumerable ?
-                                if (ReflexionHelper.IsEnumarable(propType))
+                                if (propType == typeof(ExpandoObject))
                                 {
-                                    var list = value as IEnumerable;
-                                    var listGenericType = ReflexionHelper.GetGenericTypeDefintion(list.GetType());
-                                    //Is the collection generic type is a value type (or a string)
-                                    if (ReflexionHelper.IsValueType(listGenericType))
+                                    var entityInterface = value as IDictionary<string, object>;
+                                    if (entityInterface != null && entityInterface.ContainsKey("Node"))
                                     {
-                                        foreach (var item in list)
-                                        {
-                                            dico[name].Add(GetNode(Configuration.ValueTypeName, item));
-                                        }
-                                    }
-                                    //The collection seems to carry entities
-                                    else
-                                    {
-                                        foreach (var item in list)
-                                        {
-                                            var entityInterface = item as IEntity;
-                                            if (entityInterface != null && entityInterface.Node != null)
-                                            {
-                                                dico[name].Add(entityInterface.Node);
-                                            }
-                                            else
-                                            {
-                                                dico[name].Add(CreateEntity(item));
-                                            }
-                                        }
-                                    }
-                                }
-                                //It's an entity
-                                else
-                                {
-                                    var entityInterface = value as IEntity;
-                                    if (entityInterface != null && entityInterface.Node != null)
-                                    {
-                                        dico[name].Add(entityInterface.Node);
+                                        dico[name].Add((INode)entityInterface["Node"]);
                                     }
                                     else
                                     {
                                         dico[name].Add(CreateEntity(value));
+                                    }
+                                }
+                                else
+                                {
+                                    if (ReflexionHelper.IsEnumarable(propType))
+                                    {
+                                        var list = value as IEnumerable;
+                                        var listGenericType = ReflexionHelper.GetGenericTypeDefintion(list.GetType());
+                                        //Is the collection generic type is a value type (or a string)
+                                        if (ReflexionHelper.IsValueType(listGenericType))
+                                        {
+                                            foreach (var item in list)
+                                            {
+                                                dico[name].Add(GetNode(Configuration.ValueTypeName, item));
+                                            }
+                                        }
+                                        //The collection seems to carry entities
+                                        else
+                                        {
+                                            foreach (var item in list)
+                                            {
+                                                var entityInterface = item as IEntity;
+                                                if (entityInterface != null && entityInterface.Node != null)
+                                                {
+                                                    dico[name].Add(entityInterface.Node);
+                                                }
+                                                else
+                                                {
+                                                    dico[name].Add(CreateEntity(item));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    //It's an entity
+                                    else
+                                    {
+                                        var entityInterface = value as IEntity;
+                                        if (entityInterface != null && entityInterface.Node != null)
+                                        {
+                                            dico[name].Add(entityInterface.Node);
+                                        }
+                                        else
+                                        {
+                                            dico[name].Add(CreateEntity(value));
+                                        }
                                     }
                                 }
                             }
@@ -351,6 +390,14 @@ namespace HolyNoodle.KnowledgeBase
                     return (T)r;                
             }
             return (T)(object)null;
+        }
+
+        public static dynamic Populate(this IEntity entity, EntityManager em)
+        {
+            using (var qb = em.GetQueryBuilder().ById(entity.Node.Id))
+            {
+                return qb.Execute().FirstOrDefault();
+            }
         }
     }
 
